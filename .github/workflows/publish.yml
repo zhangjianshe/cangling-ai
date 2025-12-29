@@ -1,13 +1,18 @@
-name: Publish to Nexus
+name: Publish to Nexus and PyPI
 
 on:
   push:
     tags:
-      - 'v*' # Trigger only when you push a tag like v0.1.0
+      - 'v*'
 
 jobs:
   build-n-publish:
     runs-on: ubuntu-latest
+    # Added permissions for the official OIDC PyPI authentication
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,11 +30,17 @@ jobs:
       - name: Build package
         run: python -m build
 
-      - name: Upload to Nexus
+      - name: Upload to Private Nexus
         env:
           TWINE_USERNAME: ${{ secrets.CANGLING_REPO_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.CANGLING_REPO_PASSWORD }}
-          # Use your specific repository URL here
           TWINE_REPOSITORY_URL: https://repository.cangling.cn:22002/repository/cangling-py/
         run: |
-          twine upload --repository-url $TWINE_REPOSITORY_URL dist/*
+          # The --skip-existing flag is helpful to prevent failure if the version already exists
+          twine upload --skip-existing --repository-url $TWINE_REPOSITORY_URL dist/*
+
+      - name: Upload to Official PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # This uses the API token you generated on PyPI
+          password: ${{ secrets.PYPI_API_TOKEN }}
