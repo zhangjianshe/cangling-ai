@@ -27,9 +27,9 @@ jobs:
 
       - name: Upload to Nexus
         env:
-          TWINE_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+          TWINE_USERNAME: ${{ secrets.CANGLING_REPO_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.CANGLING_REPO_PASSWORD }}
           # Use your specific repository URL here
-          TWINE_REPOSITORY_URL: https://repo.cangling.cn/repository/cangling-py/
+          TWINE_REPOSITORY_URL: https://repository.cangling.cn:22002/repository/cangling-py/
         run: |
           twine upload --repository-url $TWINE_REPOSITORY_URL dist/*
