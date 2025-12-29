@@ -1,0 +1,18 @@
+[project]
+name = "cangling-ai"
+version = "0.1.0"
+description = "cangling ai library"
+readme = "README.md"
+authors = [{name = "zhangjianshe", email = "zhangjianshe@gmail.com"}]
+dependencies = [
+    "kafka-python==2.2.15",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["canglin*"]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
