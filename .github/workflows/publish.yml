@@ -36,8 +36,7 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.CANGLING_REPO_PASSWORD }}
           TWINE_REPOSITORY_URL: https://repository.cangling.cn:22002/repository/cangling-py/
         run: |
-          # The --skip-existing flag is helpful to prevent failure if the version already exists
-          twine upload --skip-existing --repository-url $TWINE_REPOSITORY_URL dist/*
+          twine upload  --repository-url $TWINE_REPOSITORY_URL dist/*
 
       - name: Upload to Official PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
