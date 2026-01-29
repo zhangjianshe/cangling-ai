@@ -3,14 +3,19 @@ name = "cangling-ai"
 version = "0.1.5"
 description = "cangling ai library"
 readme = "README.md"
+requires-python = ">=3.10"
 authors = [{name = "zhangjianshe", email = "zhangjianshe@gmail.com"}]
 dependencies = [
-    "kafka-python==2.2.15",
+    "kafka-python==2.0.2",
+    "loguru >= 0.7.3",
 ]
+
+[tool.setuptools]
+packages = ["cangling"] # 明确指定你的源代码目录名
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["canglin*"]
+include = ["cangling", "cangling.*"]
 
 [build-system]
 requires = ["setuptools", "wheel"]
