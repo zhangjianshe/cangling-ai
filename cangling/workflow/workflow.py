@@ -44,12 +44,14 @@ class WorkflowMessage(ABC):
     messageType: MessageType = MessageType.UNKNOWN
 
     def __post_init__(self):
-        # 从环境变量或全局状态获取 taskId
+        # 1. 核心修复：确保父类初始化基础字段
         self.taskId = os.getenv("KAFKA_TASK_ID", "")
         self.sendTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     def to_dict(self):
         return asdict(self)
+
+
 
 
 @dataclass
@@ -77,6 +79,8 @@ class ProgressMessage(WorkflowMessage):
     messageContent: ProgressContent = field(default_factory=ProgressContent)
 
     def __post_init__(self):
+        # 2. 核心修复：显式调用父类，防止 taskId 丢失
+        super().__post_init__()
         self.messageType = MessageType.PROGRESS
 
     def set_source(self, source=None, rank=None):
@@ -170,8 +174,13 @@ class Workflow:
             logger.info("[WF-OFFLINE] {}", json.dumps(data, ensure_ascii=False))
             return
         try:
+            # 补丁：如果由于某种原因 taskId 没取到，给个默认值防止 Kafka 消费端崩溃
+            if not data.get("taskId"):
+                data["taskId"] = self._kafka_taskid or "unknown-task"
+
             self._producer.send(self._kafka_topic, value=data)
-            self._producer.flush()
+            # 注意：在高频发送时，建议去掉这里的 self._producer.flush() 提高性能
+            # 已经在 atexit 中处理了退出时的冲刷
             logger.debug("[WF-SENT] {}", data.get("messageType"))
         except Exception as e:
             logger.warning(f"[WORKFLOW] 发送任务异常: {e}")
