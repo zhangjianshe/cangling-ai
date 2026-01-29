@@ -1,0 +1,190 @@
+"""
+这是一个工作流引擎的封装，如果一个项目需要集成到工作流中，可以通过引入该类 就可以通过该类
+工作流引擎交互
+这个类的运行机制
+1. 从环境变量中获取链接工作流的信息 (KAFKA ADDRESS)
+2. 建立一个全局的对象
+"""
+import atexit
+import json
+import os
+import sys
+import threading
+from abc import ABC
+from dataclasses import dataclass, asdict, field
+from datetime import datetime
+from enum import Enum
+
+from kafka import KafkaProducer
+from loguru import logger
+
+# 移除默认配置，重新添加并开启 flush=True 确保实时性
+logger.remove()
+logger.add(
+    sys.stdout,
+    colorize=True,
+    enqueue=True,
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{message}</cyan>"
+)
+
+"""
+    消息类型
+"""
+
+
+class MessageType(str, Enum):
+    UNKNOWN = "unknown"
+    PROGRESS = "progress"
+
+
+@dataclass
+class WorkflowMessage(ABC):
+    taskId: str = field(init=False)
+    sendTime: str = field(init=False)
+    messageType: MessageType = MessageType.UNKNOWN
+
+    def __post_init__(self):
+        # 从环境变量或全局状态获取 taskId
+        self.taskId = os.getenv("KAFKA_TASK_ID", "")
+        self.sendTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class ProgressContent:
+    version: str = 3
+    progress: int = 0
+    runningStatus: str = "running"  # running, completed
+    runningInfo: str = ""  ## Anything starting
+    title: str = ""  # Anything module name
+    titleId: str = ""  # Anything module id
+    source: str = ""  # module, engine
+    rank: int = 0
+    totalProgress: int = 0
+    totalRunningStatus: str = ""  # running, completed
+    totalRunningInfo: str = ""  # Anything module @str
+    inferProgress: int = 0
+    inferFilename: str = ""  # somefile.tif
+    inferPreviewFilename: str = ""  # somefile_id.tif
+    inferGeoInfo: str = "POLYGON EMPTY"  # POLYGON(({x1} {y1}, {x2} {y2}, {x3} {y3}, {x4} {y4}, {x1} {y1})) @str - list
+    inferObjectGeoInfo: str = "POLYGON EMPTY"  # POLYGON(({x1} {y1}, {x2} {y2}, {x3} {y3}, {x4} {y4}, {x1} {y1})) @str - list
+
+
+@dataclass
+class ProgressMessage(WorkflowMessage):
+    messageContent: ProgressContent = field(default_factory=ProgressContent)
+
+    def __post_init__(self):
+        self.messageType = MessageType.PROGRESS
+
+    def set_source(self, source=None, rank=None):
+        if source is not None:
+            self.messageContent.source = source
+        if rank is not None:
+            self.messageContent.rank = rank
+
+    def set_title(self, title=None, title_id=None):
+        if title is not None:
+            self.messageContent.title = title
+        if title_id is not None:
+            self.messageContent.titleId = title_id
+
+
+class Workflow:
+    _instance = None
+    _lock = threading.Lock()
+
+    # 私有变量定义
+    _kafka_address: str | None = None
+    _kafka_topic: str | None = None
+    _kafka_taskid: str | None = None
+    _producer: KafkaProducer | None = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(Workflow, cls).__new__(cls)
+                    # 1. 在 __new__ 中完成配置加载
+                    cls._instance._load_config()
+                    # 2. 初始化连接
+                    cls._instance._init_connection()
+        return cls._instance
+
+    def __init__(self):
+        # 防止重复初始化逻辑（虽然 __new__ 已经处理了核心部分）
+        if hasattr(self, '_initialized'):
+            return
+        self._initialized = True
+        atexit.register(self.close)
+
+    def close(self):
+        """确保所有消息已发出并关闭连接"""
+        if self._producer is not None:
+            try:
+                logger.info("[WORKFLOW] 正在关闭 Kafka 连接，正在冲刷剩余消息...")
+                self._producer.flush(timeout=10) # 设置超时，防止无限等待
+                self._producer.close()
+                self._producer = None
+                logger.success("[WORKFLOW] Kafka 连接已安全关闭")
+            except Exception as e:
+                logger.error(f"[WORKFLOW] 关闭连接时发生异常: {e}")
+
+    def _load_config(self):
+        """内部逻辑：从环境变量加载配置"""
+        self._kafka_address = os.getenv("KAFKA_SERVER_IP_PORT")
+        self._kafka_topic = os.getenv("KAFKA_TOPIC")
+        self._kafka_taskid = os.getenv("KAFKA_TASK_ID")
+
+    def _is_config_invalid(self) -> bool:
+        """校验配置是否完整（非空且不全是空格）"""
+        configs = [self._kafka_address, self._kafka_topic]
+        return any(c is None or c.strip() == "" for c in configs)
+
+    def _init_connection(self):
+        """建立真正的 Kafka 连接"""
+        if self._is_config_invalid():
+            logger.error(f"[WORKFLOW]环境变量 KAFKA_SERVER_IP_PORT 或 KAFKA_TOPIC 未设置")
+            return
+
+        try:
+            # 初始化 KafkaProducer
+            self._producer = KafkaProducer(
+                bootstrap_servers=self._kafka_address,
+                value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+                # 设置超时时间，防止进程卡死
+                retries=3
+            )
+            logger.info(f"[WORKFLOW] 成功连接至 Kafka: {self._kafka_address}")
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Kafka 连接失败: {e}")
+
+    def send_message(self, message: WorkflowMessage):
+        self._send_message(message.to_dict())
+
+    def _send_message(self, data: dict):
+        """外部调用的主方法"""
+        if self._producer is None:
+            logger.info("[WF-OFFLINE] {}", json.dumps(data, ensure_ascii=False))
+            return
+        try:
+            self._producer.send(self._kafka_topic, value=data)
+            self._producer.flush()
+            logger.debug("[WF-SENT] {}", data.get("messageType"))
+        except Exception as e:
+            logger.warning(f"[WORKFLOW] 发送任务异常: {e}")
+
+
+# 使用示例
+if __name__ == "__main__":
+    wf = Workflow()
+    # 构造进度消息
+    pm = ProgressMessage()
+    pm.set_title(title="遥感影像处理模块", title_id="mod-001")
+    pm.set_source(source="engine", rank=1)
+
+    # 更新具体进度
+    pm.messageContent.progress = 50
+    pm.messageContent.runningInfo = "正在解析 GeoTIFF 头部信息..."
