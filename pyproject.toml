@@ -10,9 +10,6 @@ dependencies = [
     "loguru >= 0.7.3",
 ]
 
-[tool.setuptools]
-packages = ["cangling"] # 明确指定你的源代码目录名
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["cangling", "cangling.*"]
