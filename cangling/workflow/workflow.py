@@ -20,8 +20,11 @@ from loguru import logger
 
 # 移除默认配置，重新添加并开启 flush=True 确保实时性
 logger.remove()
+# 获取环境变量中的日志级别，默认为 INFO
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logger.add(
     sys.stdout,
+    level=log_level, # 动态级别
     colorize=True,
     enqueue=True,
     format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{message}</cyan>"
@@ -94,6 +97,8 @@ class ProgressMessage(WorkflowMessage):
             self.messageContent.title = title
         if title_id is not None:
             self.messageContent.titleId = title_id
+
+
 
 
 class Workflow:
@@ -185,7 +190,21 @@ class Workflow:
         except Exception as e:
             logger.warning(f"[WORKFLOW] 发送任务异常: {e}")
 
+    @staticmethod
+    def info(self,msg):
+        logger.info(f"[WORKFLOW] {msg}")
 
+    @staticmethod
+    def warn(self,msg):
+        logger.warning(f"[WORKFLOW] {msg}")
+
+    @staticmethod
+    def error(self,msg):
+        logger.error(f"[WORKFLOW] {msg}")
+
+    @staticmethod
+    def debug(self,msg):
+        logger.debug(f"[WORKFLOW] {msg}")
 # 使用示例
 if __name__ == "__main__":
     wf = Workflow()
