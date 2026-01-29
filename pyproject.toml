@@ -1,6 +1,6 @@
 [project]
 name = "cangling-ai"
-version = "0.1.4"
+version = "0.1.5"
 description = "cangling ai library"
 readme = "README.md"
 authors = [{name = "zhangjianshe", email = "zhangjianshe@gmail.com"}]
