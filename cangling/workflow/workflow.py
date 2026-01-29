@@ -191,19 +191,19 @@ class Workflow:
             logger.warning(f"[WORKFLOW] 发送任务异常: {e}")
 
     @staticmethod
-    def info(self,msg):
+    def info(msg):
         logger.info(f"[WORKFLOW] {msg}")
 
     @staticmethod
-    def warn(self,msg):
+    def warn(msg):
         logger.warning(f"[WORKFLOW] {msg}")
 
     @staticmethod
-    def error(self,msg):
+    def error(msg):
         logger.error(f"[WORKFLOW] {msg}")
 
     @staticmethod
-    def debug(self,msg):
+    def debug(msg):
         logger.debug(f"[WORKFLOW] {msg}")
 # 使用示例
 if __name__ == "__main__":
