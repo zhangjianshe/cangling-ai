@@ -3,7 +3,11 @@
 工作流引擎交互
 这个类的运行机制
 1. 从环境变量中获取链接工作流的信息 (KAFKA ADDRESS)
-2. 建立一个全局的对象
+2. 建立一个全局的对象 Workflow 实例
+3. send_message() 发送进度消息
+4. write_output(key,value) 会将结果写回到工作流引擎，工作流引擎保存該值并在合适的时候传递
+   到下一个节点
+
 """
 import atexit
 import json
@@ -14,6 +18,7 @@ from abc import ABC
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import Enum
+from typing import Self
 
 from kafka import KafkaProducer
 from loguru import logger
@@ -31,14 +36,24 @@ logger.add(
 )
 
 """
+  消息来源
+"""
+class SourceType(str,Enum):
+    ENGINE = "engine"
+    MODULE = "module"
+
+
+class RunningStatus(str,Enum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+
+"""
     消息类型
 """
-
-
 class MessageType(str, Enum):
-    UNKNOWN = "unknown"
+    UNKNOWN  =  "unknown"
     PROGRESS = "progress"
-
+    OUTPUT   = "output" #输出消息
 
 @dataclass
 class WorkflowMessage(ABC):
@@ -61,14 +76,14 @@ class WorkflowMessage(ABC):
 class ProgressContent:
     version: str = 3
     progress: int = 0
-    runningStatus: str = "running"  # running, completed
+    runningStatus: RunningStatus = RunningStatus.RUNNING  # running, completed
     runningInfo: str = ""  ## Anything starting
     title: str = ""  # Anything module name
     titleId: str = ""  # Anything module id
-    source: str = ""  # module, engine
+    source: SourceType = SourceType.MODULE  # [module, engine]
     rank: int = 0
     totalProgress: int = 0
-    totalRunningStatus: str = ""  # running, completed
+    totalRunningStatus: RunningStatus = RunningStatus.RUNNING  # running, completed
     totalRunningInfo: str = ""  # Anything module @str
     inferProgress: int = 0
     inferFilename: str = ""  # somefile.tif
@@ -86,18 +101,45 @@ class ProgressMessage(WorkflowMessage):
         super().__post_init__()
         self.messageType = MessageType.PROGRESS
 
-    def set_source(self, source=None, rank=None):
+    def set_source(self, source=None, rank=None) ->Self:
         if source is not None:
             self.messageContent.source = source
         if rank is not None:
             self.messageContent.rank = rank
+        return self
 
-    def set_title(self, title=None, title_id=None):
+    def set_title(self, title:str|None=None, title_id:str|None=None) ->Self:
         if title is not None:
             self.messageContent.title = title
         if title_id is not None:
             self.messageContent.titleId = title_id
+        return self
+    """
+        引擎消息
+        
+    """
+    def engine_message(self,rank=None) -> Self:
+        self.messageContent.source = SourceType.ENGINE
+        if rank is not None:
+            self.messageContent.rank = rank
+        return self
+    """
+        子节点消息
+    """
+    def module_message(self,rank=None) -> Self:
+        self.messageContent.source = SourceType.MODULE
+        if rank is not None:
+            self.messageContent.rank = rank
+        return self
 
+@dataclass
+class OutputMessage(WorkflowMessage):
+    kvList: list = field(default_factory=list)
+
+    def __post_init__(self):
+        # 2. 核心修复：显式调用父类，防止 taskId 丢失
+        super().__post_init__()
+        self.messageType = MessageType.OUTPUT
 
 
 
@@ -147,6 +189,7 @@ class Workflow:
         self._kafka_topic = os.getenv("KAFKA_TOPIC")
         self._kafka_taskid = os.getenv("KAFKA_TASK_ID")
 
+
     def _is_config_invalid(self) -> bool:
         """校验配置是否完整（非空且不全是空格）"""
         configs = [self._kafka_address, self._kafka_topic]
@@ -167,8 +210,14 @@ class Workflow:
                 retries=3
             )
             logger.info(f"[WORKFLOW] 成功连接至 Kafka: {self._kafka_address}")
+            logger.info(f"[WORKFLOW] 发送消息到 {self._kafka_topic}")
         except Exception as e:
             logger.error(f"[WORKFLOW] Kafka 连接失败: {e}")
+
+    def write_output(self,**kwargs):
+        message = OutputMessage()
+        message.kvList=[{k: v} for k, v in kwargs.items()]
+        self.send_message(message)
 
     def send_message(self, message: WorkflowMessage):
         self._send_message(message.to_dict())
@@ -209,10 +258,11 @@ class Workflow:
 if __name__ == "__main__":
     wf = Workflow()
     # 构造进度消息
-    pm = ProgressMessage()
+    pm = ProgressMessage().engine_message(1)
     pm.set_title(title="遥感影像处理模块", title_id="mod-001")
-    pm.set_source(source="engine", rank=1)
 
     # 更新具体进度
     pm.messageContent.progress = 50
     pm.messageContent.runningInfo = "正在解析 GeoTIFF 头部信息..."
+
+    wf.write_output(FINAL_DATA="HELLO_WORLD",PIXEL_SIZE="3568")
