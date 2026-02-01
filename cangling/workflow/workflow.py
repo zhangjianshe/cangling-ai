@@ -213,10 +213,12 @@ class Workflow:
             logger.info(f"[WORKFLOW] 发送消息到 {self._kafka_topic}")
         except Exception as e:
             logger.error(f"[WORKFLOW] Kafka 连接失败: {e}")
-
+    """
+        向工作流引擎输出 Key:Value 对
+    """
     def write_output(self,**kwargs):
         message = OutputMessage()
-        message.kvList=[{k: v} for k, v in kwargs.items()]
+        message.kvList=[{"name": k,"value":v} for k, v in kwargs.items()]
         self.send_message(message)
 
     def send_message(self, message: WorkflowMessage):
