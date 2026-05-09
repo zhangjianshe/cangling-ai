@@ -200,8 +200,8 @@ class NodeProgressMessage(WorkflowBaseMessage):
 
 @dataclass
 class StepBeginMessage(WorkflowBaseMessage):
-    title: str
     step: int
+    title: str
 
 
     def __post_init__(self):
@@ -222,9 +222,9 @@ class StepEndMessage(WorkflowBaseMessage):
 
 @dataclass
 class StepProgressMessage(WorkflowBaseMessage):
+    step: int
     progress: int
     message: str
-    step: int
 
 
     def __post_init__(self):
@@ -234,8 +234,8 @@ class StepProgressMessage(WorkflowBaseMessage):
 
 @dataclass
 class StepMessage(WorkflowBaseMessage):
-    message: str = field(default="")
     step: int = field(default=1)
+    message: str = field(default="")
 
 
     def __post_init__(self):

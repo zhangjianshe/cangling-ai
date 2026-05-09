@@ -119,7 +119,7 @@ class RunningContext:
         :param title: 步骤标题（如：影像预处理）
         :param step: 当前步骤的序号（从1开始）
         """
-        step_begin_message = StepBeginMessage(title, step)
+        step_begin_message = StepBeginMessage(step, title)
         self._workflow.send_message(step_begin_message)
 
     def step_progress(self, step: int = 1, progress: int = 1, msg: str = "") -> None:
@@ -177,9 +177,4 @@ class ImageBotEngine:
         return self.context
 
     def close(self):
-        """
-        手动关闭引擎环境，释放资源。
-        通常情况下，系统会自动通过 atexit 调用。
-        """
-        if self.context:
-            self.context.close()
+        pass
