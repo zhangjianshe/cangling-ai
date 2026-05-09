@@ -29,3 +29,4 @@ rich==14.2.0
 SecretStorage==3.5.0
 twine==6.2.0
 urllib3==2.6.2
+gdal==3.12.1

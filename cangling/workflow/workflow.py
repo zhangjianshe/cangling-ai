@@ -9,7 +9,7 @@
    到下一个节点
 
 """
-import atexit
+
 import json
 import os
 import sys
@@ -29,7 +29,7 @@ logger.remove()
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logger.add(
     sys.stdout,
-    level=log_level, # 动态级别
+    level=log_level,  # 动态级别
     colorize=True,
     enqueue=True,
     format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{message}</cyan>"
@@ -38,38 +38,54 @@ logger.add(
 """
   消息来源
 """
-class SourceType(str,Enum):
+
+
+class SourceType(str, Enum):
     ENGINE = "engine"
     MODULE = "module"
 
 
-class RunningStatus(str,Enum):
+class RunningStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
+    FAILED = "failed"
+
 
 """
     消息类型
 """
+
+
 class MessageType(str, Enum):
-    UNKNOWN  =  "unknown"
-    PROGRESS = "progress"
-    OUTPUT   = "output" #输出消息
+    UNKNOWN = "unknown"
+    NODE_BEGIN = "node_begin"
+    NODE_END = "node_end"
+    NODE_PROGRESS = "node_progress"
+    STEP_BEGIN = "step_begin"
+    STEP_END = "step_end"
+    STEP_PROGRESS = "step_progress"
+    STEP_MESSAGE = "step_message"
+    V3MESSAGE = "v3message"
+    OUTPUT = "output"  # 输出消息
+
 
 @dataclass
-class WorkflowMessage(ABC):
+class WorkflowBaseMessage(ABC):
+    """
+    消息基础类
+    """
     taskId: str = field(init=False)
     sendTime: str = field(init=False)
-    messageType: MessageType = MessageType.UNKNOWN
+    messageType: MessageType = field(init=False)
 
     def __post_init__(self):
         # 1. 核心修复：确保父类初始化基础字段
         self.taskId = os.getenv("KAFKA_TASK_ID", "")
         self.sendTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.messageType = MessageType.UNKNOWN
 
     def to_dict(self):
         return asdict(self)
-
-
 
 
 @dataclass
@@ -93,7 +109,10 @@ class ProgressContent:
 
 
 @dataclass
-class ProgressMessage(WorkflowMessage):
+class ProgressBaseMessage(WorkflowBaseMessage):
+    """
+    v3message进度消息
+    """
     messageContent: ProgressContent = field(default_factory=ProgressContent)
 
     def __post_init__(self):
@@ -101,39 +120,44 @@ class ProgressMessage(WorkflowMessage):
         super().__post_init__()
         self.messageType = MessageType.PROGRESS
 
-    def set_source(self, source=None, rank=None) ->Self:
+    def set_source(self, source=None, rank=None) -> Self:
         if source is not None:
             self.messageContent.source = source
         if rank is not None:
             self.messageContent.rank = rank
         return self
 
-    def set_title(self, title:str|None=None, title_id:str|None=None) ->Self:
+    def set_title(self, title: str | None = None, title_id: str | None = None) -> Self:
         if title is not None:
             self.messageContent.title = title
         if title_id is not None:
             self.messageContent.titleId = title_id
         return self
+
     """
         引擎消息
         
     """
-    def engine_message(self,rank=None) -> Self:
+
+    def engine_message(self, rank=None) -> Self:
         self.messageContent.source = SourceType.ENGINE
         if rank is not None:
             self.messageContent.rank = rank
         return self
+
     """
         子节点消息
     """
-    def module_message(self,rank=None) -> Self:
+
+    def module_message(self, rank=None) -> Self:
         self.messageContent.source = SourceType.MODULE
         if rank is not None:
             self.messageContent.rank = rank
         return self
 
+
 @dataclass
-class OutputMessage(WorkflowMessage):
+class OutputBaseMessage(WorkflowBaseMessage):
     kvList: list = field(default_factory=list)
 
     def __post_init__(self):
@@ -141,6 +165,82 @@ class OutputMessage(WorkflowMessage):
         super().__post_init__()
         self.messageType = MessageType.OUTPUT
 
+
+@dataclass
+class NodeBeginMessage(WorkflowBaseMessage):
+    title: str
+    step_count: int
+
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.messageType = MessageType.NODE_BEGIN
+
+
+@dataclass
+class NodeEndMessage(WorkflowBaseMessage):
+    message: str
+    success: bool
+
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.messageType = MessageType.NODE_END
+
+
+@dataclass
+class NodeProgressMessage(WorkflowBaseMessage):
+    progress: int
+    message: str
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.messageType = MessageType.NODE_PROGRESS
+
+
+@dataclass
+class StepBeginMessage(WorkflowBaseMessage):
+    title: str
+    step: int
+
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.messageType = MessageType.STEP_BEGIN
+
+
+@dataclass
+class StepEndMessage(WorkflowBaseMessage):
+    step: int
+    message: str
+    success: bool
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.messageType = MessageType.STEP_END
+
+
+@dataclass
+class StepProgressMessage(WorkflowBaseMessage):
+    progress: int
+    message: str
+    step: int
+
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.messageType = MessageType.STEP_PROGRESS
+
+
+@dataclass
+class StepMessage(WorkflowBaseMessage):
+    message: str = field(default="")
+    step: int = field(default=1)
+
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.messageType = MessageType.STEP_MESSAGE
 
 
 class Workflow:
@@ -169,14 +269,13 @@ class Workflow:
         if hasattr(self, '_initialized'):
             return
         self._initialized = True
-        atexit.register(self.close)
 
     def close(self):
         """确保所有消息已发出并关闭连接"""
         if self._producer is not None:
             try:
                 logger.info("[WORKFLOW] 正在关闭 Kafka 连接，正在冲刷剩余消息...")
-                self._producer.flush(timeout=10) # 设置超时，防止无限等待
+                self._producer.flush(timeout=10)  # 设置超时，防止无限等待
                 self._producer.close()
                 self._producer = None
                 logger.success("[WORKFLOW] Kafka 连接已安全关闭")
@@ -189,6 +288,16 @@ class Workflow:
         self._kafka_topic = os.getenv("KAFKA_TOPIC")
         self._kafka_taskid = os.getenv("KAFKA_TASK_ID")
 
+    """
+        获取输出文件名称 从环境变量 NODE_OUTPUT 获取 
+        如果没有设置 就获取当前目录 最终的输出文件名称为 output.json
+    """
+
+    def get_output_file(self) -> None | str:
+        output_dir = os.getenv("NODE_OUTPUT", "")
+        if len(output_dir) == 0:
+            output_dir = os.getcwd()
+        return os.path.join(output_dir, "output.json")
 
     def _is_config_invalid(self) -> bool:
         """校验配置是否完整（非空且不全是空格）"""
@@ -213,15 +322,23 @@ class Workflow:
             logger.info(f"[WORKFLOW] 发送消息到 {self._kafka_topic}")
         except Exception as e:
             logger.error(f"[WORKFLOW] Kafka 连接失败: {e}")
+
     """
         向工作流引擎输出 Key:Value 对
     """
-    def write_output(self,**kwargs):
-        message = OutputMessage()
-        message.kvList=[{"name": k,"value":v} for k, v in kwargs.items()]
+
+    def write_output(self, **kwargs):
+        message = OutputBaseMessage()
+        message.kvList = [{"name": k, "value": v} for k, v in kwargs.items()]
         self.send_message(message)
 
-    def send_message(self, message: WorkflowMessage):
+    def read(self, key, default_value: None | str) -> str:
+        if key is None:
+            return default_value
+        else:
+            return os.getenv(key)
+
+    def send_message(self, message: WorkflowBaseMessage):
         self._send_message(message.to_dict())
 
     def _send_message(self, data: dict):
@@ -256,15 +373,17 @@ class Workflow:
     @staticmethod
     def debug(msg):
         logger.debug(f"[WORKFLOW] {msg}")
+
+
 # 使用示例
 if __name__ == "__main__":
     wf = Workflow()
     # 构造进度消息
-    pm = ProgressMessage().engine_message(1)
+    pm = ProgressBaseMessage().engine_message(1)
     pm.set_title(title="遥感影像处理模块", title_id="mod-001")
 
     # 更新具体进度
     pm.messageContent.progress = 50
     pm.messageContent.runningInfo = "正在解析 GeoTIFF 头部信息..."
 
-    wf.write_output(FINAL_DATA="HELLO_WORLD",PIXEL_SIZE="3568")
+    wf.write_output(FINAL_DATA="HELLO_WORLD", PIXEL_SIZE="3568")

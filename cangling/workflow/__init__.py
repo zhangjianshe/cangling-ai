@@ -1,1 +1,1 @@
-from .workflow import  Workflow,ProgressContent,MessageType,ProgressMessage
+from .workflow import  Workflow,ProgressContent,MessageType,ProgressBaseMessage
