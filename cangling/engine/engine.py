@@ -91,13 +91,13 @@ class Context:
         begin_message = NodeBeginMessage(title, step_count)
         self._workflow.send_message(begin_message)
 
-    def node_progress(self, progress: int = 1) -> None:
+    def node_progress(self, progress: int = 1,msg:str ="") -> None:
         """
         更新节点的总体进度。
 
         :param progress: 总体进度百分比 (0-100)
         """
-        progress_message = NodeProgressMessage(progress)
+        progress_message = NodeProgressMessage(progress=progress,message=msg)
         self._workflow.send_message(progress_message)
 
     def node_end(self,  msg: str = "",success: bool = True) -> None:
