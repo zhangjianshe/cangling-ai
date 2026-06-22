@@ -16,7 +16,7 @@ from cangling.workflow.workflow import \
     StepMessage, Workflow
 
 
-class RunningContext:
+class Context:
     """
     算法运行时的上下文环境，负责与工作流引擎进行实时交互。
 
@@ -148,7 +148,7 @@ class RunningContext:
         self._workflow.send_message(step_end_message)
 
 
-class ImageBotEngine:
+class Engine:
     """
     ImageBot 引擎单例类。
     用于管理和获取算法运行环境的唯一入口。
