@@ -1,7 +1,7 @@
 # cangling/__init__.py
 
 # 1. Define the package version
-__version__ = "0.1.19"
+__version__ = "0.1.20"
 
 # 2. Maintain your existing package imports
 from .workflow import Workflow, ProgressContent, MessageType, ProgressBaseMessage
