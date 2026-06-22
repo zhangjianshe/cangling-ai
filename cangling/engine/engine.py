@@ -100,7 +100,7 @@ class Context:
         progress_message = NodeProgressMessage(progress)
         self._workflow.send_message(progress_message)
 
-    def node_end(self, success: bool = True, msg: str = "") -> None:
+    def node_end(self,  msg: str = "",success: bool = True) -> None:
         """
         标记算法节点运行结束。
 
@@ -155,7 +155,7 @@ class Engine:
     """
     _instance = None
     _lock = threading.Lock()
-    context: Context = None
+    _context: Context = None
 
     def __new__(cls):
         """实现线程安全的单例模式"""
@@ -172,9 +172,9 @@ class Engine:
 
         :return: RunningContext 实例
         """
-        if self.context is None:
-            self.context = Context()
-        return self.context
+        if self._context is None:
+            self._context = Context()
+        return self._context
 
     def close(self):
         pass
