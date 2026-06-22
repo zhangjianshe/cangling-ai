@@ -13,41 +13,41 @@ def run_command(command):
         sys.exit(1)
     return result.stdout.strip()
 
-def bump_version(part):
-    """Reads pyproject.toml, increments version, and writes it back."""
-    if not os.path.exists("pyproject.toml"):
-        print("❌ Error: pyproject.toml not found in current directory.")
+def bump_init_version(init_file_path, part):
+    """Reads __init__.py, increments the version string, and writes it back."""
+    if not os.path.exists(init_file_path):
+        print(f"❌ Error: {init_file_path} not found.")
         sys.exit(1)
 
-    with open("pyproject.toml", "r") as f:
+    with open(init_file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Regex to find version = "x.y.z"
-    version_pattern = r'version\s*=\s*"(\d+)\.(\d+)\.(\d+)"'
+    # Regex to precisely catch __version__ = "x.y.z"
+    version_pattern = r'__version__\s*=\s*"(\d+)\.(\d+)\.(\d+)"'
     match = re.search(version_pattern, content)
-    
+
     if not match:
-        print("❌ Error: Could not find a valid version string in pyproject.toml.")
+        print(f"❌ Error: Could not find a valid __version__ string in {init_file_path}.")
         sys.exit(1)
 
     major, minor, patch = map(int, match.groups())
 
-    # Increment the version
+    # Increment the version based on selection
     if part == "major":
         major += 1; minor = 0; patch = 0
     elif part == "minor":
         minor += 1; patch = 0
     elif part == "patch":
         patch += 1
-    
+
     new_version = f"{major}.{minor}.{patch}"
-    
+
     # Replace the old version with the new one
-    new_content = re.sub(version_pattern, f'version = "{new_version}"', content)
-    
-    with open("pyproject.toml", "w") as f:
+    new_content = re.sub(version_pattern, f'__version__ = "{new_version}"', content)
+
+    with open(init_file_path, "w", encoding="utf-8") as f:
         f.write(new_content)
-    
+
     return new_version
 
 def main():
@@ -56,24 +56,26 @@ def main():
         sys.exit(1)
 
     bump_type = sys.argv[1]
+    init_path = "cangling/__init__.py"
 
-    # 1. Bump the version in pyproject.toml
-    new_version = bump_version(bump_type)
-    print(f"✅ Version bumped to {new_version}")
+    # 1. Bump the version directly in cangling/__init__.py
+    new_version = bump_init_version(init_path, bump_type)
+    print(f"🔄 Source code version bumped to {new_version}")
 
     # 2. Git Workflow
     try:
         print("🚀 Starting Git workflow...")
-        run_command("git add pyproject.toml")
+        # Since pyproject.toml reads dynamically, we only need to track the __init__.py modification!
+        run_command(f"git add {init_path}")
         run_command(f'git commit -m "chore: release version {new_version}"')
         run_command(f"git tag v{new_version}")
-        
-        print("📤 Pushing to GitHub (main branch and tags)...")
+
+        print("📤 Pushing changes to GitHub (main branch and tags)...")
         run_command("git push origin main")
         run_command("git push origin --tags")
-        
+
         print(f"\n🎉 Successfully released v{new_version}!")
-        print("GitHub Actions will now take over to publish to Nexus.")
+        print("GitHub Actions will now take over to publish to Nexus/PyPI.")
         
     except Exception as e:
         print(f"❌ An unexpected error occurred: {e}")
