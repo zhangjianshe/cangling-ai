@@ -1,8 +1,8 @@
-from cangling.engine.imagebot_engine import ImageBotEngine, RunningContext
+from cangling.engine.engine import Engine, Context
 
 
 def main():
-    context: RunningContext = ImageBotEngine().get_context()
+    context: RunningContext = Engine().context()
     step_count: int = 3
     context.node_begin("Hello test")
 
