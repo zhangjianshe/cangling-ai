@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name = "zhangjianshe", email = "zhangjianshe@gmail.com"}]
 dependencies = [
-    "kafka-python==2.0.2",
+    "kafka-python-ng>=2.2.2",
     "loguru >= 0.7.3",
 ]
 
