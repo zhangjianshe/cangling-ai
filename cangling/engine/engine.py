@@ -1,7 +1,7 @@
 """ IMAGEBOT ENGINE
 
 该模块提供了算法在工作流引擎中运行的标准环境封装。
-通过 ImageBotEngine 获取 RunningContext，可以实现：
+通过 Engine 获取 Context，可以实现：
 1. 节点与步骤的状态监控（开始、进度、结束）
 2. 数据的输入读取与结果输出
 3. 自动化的资源清理与结果持久化
@@ -155,17 +155,17 @@ class ImageBotEngine:
     """
     _instance = None
     _lock = threading.Lock()
-    context: RunningContext = None
+    context: Context = None
 
     def __new__(cls):
         """实现线程安全的单例模式"""
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = super(ImageBotEngine, cls).__new__(cls)
+                    cls._instance = super(Engine, cls).__new__(cls)
         return cls._instance
 
-    def get_context(self) -> RunningContext:
+    def context(self) -> Context:
         """
         获取当前算法的运行上下文。
         如果上下文不存在，则会自动创建一个新的实例。
@@ -173,7 +173,7 @@ class ImageBotEngine:
         :return: RunningContext 实例
         """
         if self.context is None:
-            self.context = RunningContext()
+            self.context = Context()
         return self.context
 
     def close(self):
